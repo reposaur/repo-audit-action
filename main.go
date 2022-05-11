@@ -111,27 +111,29 @@ func execute(ctx context.Context, rsr *sdk.Reposaur, client *github.Client, repo
 
 	for _, repo := range repos {
 		go func(repo *github.Repository) {
+			logger := logger.With().Str("repo", repo.GetFullName()).Logger()
+
 			report, err := rsr.Check(ctx, "repository", repo)
 			if err != nil {
-				logger.Err(err).Send()
+				logger.Err(err).Msg("Executing policies")
 				return
 			}
 
 			sarifReport, err := output.NewSarifReport(report)
 			if err != nil {
-				logger.Err(err).Send()
+				logger.Err(err).Msg("Creating SARIF report")
 				return
 			}
 
 			encodedSarif, err := encodeSarif(sarifReport)
 			if err != nil {
-				logger.Err(err).Send()
+				logger.Err(err).Msg("Encoding SARIF report")
 				return
 			}
 
 			branch, _, err := client.Repositories.GetBranch(ctx, repo.Owner.GetLogin(), repo.GetName(), repo.GetDefaultBranch(), true)
 			if err != nil {
-				logger.Err(err).Send()
+				logger.Err(err).Msg("Fetching default branch information")
 				return
 			}
 
@@ -144,7 +146,7 @@ func execute(ctx context.Context, rsr *sdk.Reposaur, client *github.Client, repo
 
 			id, _, err := client.CodeScanning.UploadSarif(ctx, repo.Owner.GetLogin(), repo.GetName(), sarifAnalysis)
 			if err != nil {
-				logger.Err(err).Send()
+				logger.Err(err).Msg("Uploading SARIF report")
 				return
 			}
 
