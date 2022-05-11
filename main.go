@@ -96,8 +96,9 @@ func main() {
 }
 
 type repoReport struct {
-	repo   *github.Repository
-	report output.Report
+	repo        *github.Repository
+	report      output.Report
+	sarifReport *sarif.Report
 }
 
 func execute(ctx context.Context, rsr *sdk.Reposaur, client *github.Client, repos []*github.Repository) error {
@@ -120,23 +121,29 @@ func execute(ctx context.Context, rsr *sdk.Reposaur, client *github.Client, repo
 				return
 			}
 
-			reportsCh <- repoReport{repo: repo, report: report}
-			reportsWg.Done()
-
 			sarifReport, err := output.NewSarifReport(report)
 			if err != nil {
+				reportsWg.Done()
 				logger.Err(err).Msg("Creating SARIF report")
 				return
 			}
 
+			reportsCh <- repoReport{
+				repo:        repo,
+				report:      report,
+				sarifReport: sarifReport,
+			}
+
 			encodedSarif, err := encodeSarif(sarifReport)
 			if err != nil {
+				reportsWg.Done()
 				logger.Err(err).Msg("Encoding SARIF report")
 				return
 			}
 
 			branch, _, err := client.Repositories.GetBranch(ctx, repo.Owner.GetLogin(), repo.GetName(), repo.GetDefaultBranch(), true)
 			if err != nil {
+				reportsWg.Done()
 				logger.Err(err).Msg("Fetching default branch information")
 				return
 			}
@@ -150,30 +157,35 @@ func execute(ctx context.Context, rsr *sdk.Reposaur, client *github.Client, repo
 
 			id, _, err := client.CodeScanning.UploadSarif(ctx, repo.Owner.GetLogin(), repo.GetName(), sarifAnalysis)
 			if err != nil {
+				reportsWg.Done()
 				logger.Err(err).Msg("Uploading SARIF report")
 				return
 			}
 
+			reportsWg.Done()
 			logger.Info().Str("sarifID", id.GetID()).Str("sarifURL", id.GetURL()).Msg("Report uploaded")
 		}(repo)
 	}
 
+	go func() {
+		for report := range reportsCh {
+			// TODO: write reports to disk
+			logger.Info().Str("repo", report.repo.GetFullName()).Msg("Reported")
+		}
+	}()
+
 	reportsWg.Wait()
 	close(reportsCh)
-
-	for report := range reportsCh {
-		logger.Info().Str("repo", report.repo.GetFullName()).Msg("reported")
-	}
 
 	return nil
 }
 
 func encodeSarif(sarif *sarif.Report) (string, error) {
 	var (
-		buf       = bytes.Buffer{}
-		base64Enc = base64.NewEncoder(base64.RawStdEncoding, &buf)
-		wr        = gzip.NewWriter(base64Enc)
-		jsonEnc   = json.NewEncoder(wr)
+		buf     = bytes.Buffer{}
+		b64Enc  = base64.NewEncoder(base64.RawStdEncoding, &buf)
+		wr      = gzip.NewWriter(b64Enc)
+		jsonEnc = json.NewEncoder(wr)
 	)
 
 	if err := jsonEnc.Encode(sarif); err != nil {
@@ -181,7 +193,7 @@ func encodeSarif(sarif *sarif.Report) (string, error) {
 	}
 
 	wr.Close()
-	base64Enc.Close()
+	b64Enc.Close()
 
 	return buf.String(), nil
 }
