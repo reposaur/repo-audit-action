@@ -120,23 +120,23 @@ func execute(ctx context.Context, rsr *sdk.Reposaur, client *github.Client, repo
 				return
 			}
 
+			reportsCh <- repoReport{repo: repo, report: report}
+			reportsWg.Done()
+
 			sarifReport, err := output.NewSarifReport(report)
 			if err != nil {
-				reportsWg.Done()
 				logger.Err(err).Msg("Creating SARIF report")
 				return
 			}
 
 			encodedSarif, err := encodeSarif(sarifReport)
 			if err != nil {
-				reportsWg.Done()
 				logger.Err(err).Msg("Encoding SARIF report")
 				return
 			}
 
 			branch, _, err := client.Repositories.GetBranch(ctx, repo.Owner.GetLogin(), repo.GetName(), repo.GetDefaultBranch(), true)
 			if err != nil {
-				reportsWg.Done()
 				logger.Err(err).Msg("Fetching default branch information")
 				return
 			}
@@ -150,24 +150,20 @@ func execute(ctx context.Context, rsr *sdk.Reposaur, client *github.Client, repo
 
 			id, _, err := client.CodeScanning.UploadSarif(ctx, repo.Owner.GetLogin(), repo.GetName(), sarifAnalysis)
 			if err != nil {
-				reportsWg.Done()
 				logger.Err(err).Msg("Uploading SARIF report")
 				return
 			}
 
 			logger.Info().Str("sarifID", id.GetID()).Str("sarifURL", id.GetURL()).Msg("Report uploaded")
-
-			reportsCh <- repoReport{repo: repo, report: report}
 		}(repo)
 	}
 
-	for report := range reportsCh {
-		reportsWg.Done()
+	reportsWg.Wait()
+	close(reportsCh)
 
+	for report := range reportsCh {
 		logger.Info().Str("repo", report.repo.GetFullName()).Msg("reported")
 	}
-
-	reportsWg.Wait()
 
 	return nil
 }
