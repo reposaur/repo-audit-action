@@ -17,6 +17,7 @@ import (
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/reposaur/reposaur/pkg/output"
 	"github.com/reposaur/reposaur/pkg/sdk"
+	"github.com/reposaur/reposaur/pkg/util"
 	"github.com/rs/zerolog"
 	"golang.org/x/oauth2"
 )
@@ -30,46 +31,60 @@ type RepoAuditAction struct {
 }
 
 func (a *RepoAuditAction) Run() error {
-	if event := action.Context.EventName; !isSupportedEvent(event) {
-		return fmt.Errorf("unsupported event '%s'. supported events are: %v", event, supportedEvents)
-	}
-
 	var (
 		logger = zerolog.New(zerolog.ConsoleWriter{
 			Out:        os.Stdout,
 			TimeFormat: time.Kitchen,
 		})
-		ctx    = logger.WithContext(context.Background())
-		client = createClient(os.Getenv("GITHUB_TOKEN"))
-		opts   = []sdk.Option{
-			sdk.WithLogger(logger),
-			sdk.WithHTTPClient(client.Client()),
-		}
-		policyPaths = strings.Split(a.PolicyPaths, "\n")
-		owner       = action.Context.RepositoryOwner
+
+		ctx = logger.WithContext(context.Background())
 	)
 
+	// Validate if event is supported
+	if event := action.Context.EventName; !isSupportedEvent(event) {
+		return fmt.Errorf("unsupported event '%s'. supported events are: %v", event, supportedEvents)
+	}
+
+	// Validate policy paths provided
+	policyPaths := strings.Split(a.PolicyPaths, "\n")
 	if len(policyPaths) == 1 && policyPaths[0] == "" {
-		logger.Info().Msgf("No policy paths specified. Using '%s' as default", action.Context.Workspace)
+		logger.Warn().Msgf("No policy paths specified. Using '%s' as default", action.Context.Workspace)
 		policyPaths = []string{action.Context.Workspace}
 	} else {
 		logger.Info().Msgf("Using policies from: %v", policyPaths)
 	}
 
+	// Initialize Reposaur
+	client := createClient(os.Getenv("GITHUB_TOKEN"))
+
+	httpClient := client.Client()
+	httpClient.Transport = util.GitHubTransport{
+		Logger:    logger,
+		Transport: httpClient.Transport,
+	}
+
+	var (
+		opts = []sdk.Option{
+			sdk.WithLogger(logger),
+			sdk.WithHTTPClient(httpClient),
+		}
+	)
+
 	rsr, err := sdk.New(ctx, policyPaths, opts...)
 	if err != nil {
 		return err
 	}
-
 	logger.Info().Msg("Reposaur SDK initialized")
 
-	logger.Info().Msgf("Fetching all repositories for %s", owner)
-	repos, err := fetchAllRepos(ctx, client, owner)
+	// Fetch organization repositories
+	logger.Info().Msgf("Fetching all repositories for %s", action.Context.RepositoryOwner)
+	repos, err := fetchAllRepos(ctx, client, action.Context.RepositoryOwner)
 	if err != nil {
 		return err
 	}
 	logger.Info().Msgf("Got %d repositories", len(repos))
 
+	// Execute policies
 	logger.Info().Msg("Starting policy execution")
 	if err := execute(ctx, rsr, client, repos); err != nil {
 		return err
@@ -103,17 +118,20 @@ func execute(ctx context.Context, rsr *sdk.Reposaur, client *github.Client, repo
 		go func(repo *github.Repository) {
 			report, err := rsr.Check(ctx, "repository", repo)
 			if err != nil {
-				panic(err)
+				logger.Err(err).Send()
+				return
 			}
 
 			sarifReport, err := output.NewSarifReport(report)
 			if err != nil {
-				panic(err)
+				logger.Err(err).Send()
+				return
 			}
 
 			encodedSarif, err := encodeSarif(sarifReport)
 			if err != nil {
-				panic(err)
+				logger.Err(err).Send()
+				return
 			}
 
 			sarifAnalysis := &github.SarifAnalysis{
@@ -124,7 +142,8 @@ func execute(ctx context.Context, rsr *sdk.Reposaur, client *github.Client, repo
 
 			id, _, err := client.CodeScanning.UploadSarif(ctx, repo.Owner.GetLogin(), repo.GetName(), sarifAnalysis)
 			if err != nil {
-				panic(err)
+				logger.Err(err).Send()
+				return
 			}
 
 			logger.Info().Str("sarifID", id.GetID()).Str("sarifURL", id.GetURL()).Msg("Report uploaded")
