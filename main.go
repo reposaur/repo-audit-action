@@ -52,6 +52,8 @@ func (a *RepoAuditAction) Run() error {
 	if len(policyPaths) == 0 {
 		logger.Info().Msgf("No policy paths specified. Using '%s' as default", action.Context.Workspace)
 		policyPaths = append(policyPaths, action.Context.Workspace)
+	} else {
+		logger.Info().Msgf("Using policies from: %v", policyPaths)
 	}
 
 	rsr, err := sdk.New(ctx, policyPaths, opts...)
