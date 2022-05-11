@@ -2,18 +2,18 @@ name: Repo Audit Action
 description: Audit your organization's repositories using Reposaur.
 
 inputs:
-  policy-paths:
-    description: Policy Paths
+  policy:
+    description: Paths to policies or directory of policies (one path per line)
+    required: false
+  
+  output:
+    description: Directory to output reports
     required: false
 
-outputs:
-  reports:
-    description: Generated SARIF reports (JSON array)
-    value: ${{ steps.action.outputs.reports }}
-  
-  repos:
-    description: Array of repositories audited
-    value: ${{ steps.action.outputs.repos }}
+  max-errors:
+    description: Maximum number of errors to ignore before aborting (0 == infinite)
+    required: false
+    default: '0'
 
 runs:
   using: composite

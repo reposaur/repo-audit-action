@@ -3,8 +3,9 @@ module github.com/reposaur/repo-audit-action
 go 1.18
 
 require (
-	github.com/crqra/go-action v0.0.0
+	github.com/crqra/go-action v0.1.0
 	github.com/google/go-github/v42 v42.0.0
+	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79
 	github.com/owenrumney/go-sarif/v2 v2.1.1
 	github.com/reposaur/reposaur v0.6.0
 	github.com/rs/zerolog v1.26.1
@@ -20,7 +21,6 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-github/v41 v41.0.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
-	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
 	github.com/open-policy-agent/opa v0.40.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0 // indirect
