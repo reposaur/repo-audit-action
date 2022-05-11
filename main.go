@@ -129,10 +129,17 @@ func execute(ctx context.Context, rsr *sdk.Reposaur, client *github.Client, repo
 				return
 			}
 
+			branch, _, err := client.Repositories.GetBranch(ctx, repo.Owner.GetLogin(), repo.GetName(), repo.GetDefaultBranch(), true)
+			if err != nil {
+				logger.Err(err).Send()
+				return
+			}
+
 			sarifAnalysis := &github.SarifAnalysis{
-				ToolName: github.String("Reposaur"),
-				Ref:      github.String(fmt.Sprintf("refs/heads/%s", repo.GetDefaultBranch())),
-				Sarif:    &encodedSarif,
+				ToolName:  github.String("Reposaur"),
+				Ref:       github.String(fmt.Sprintf("refs/heads/%s", branch.GetName())),
+				CommitSHA: branch.Commit.SHA,
+				Sarif:     &encodedSarif,
 			}
 
 			id, _, err := client.CodeScanning.UploadSarif(ctx, repo.Owner.GetLogin(), repo.GetName(), sarifAnalysis)
