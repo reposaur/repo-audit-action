@@ -24,7 +24,6 @@ import (
 var supportedEvents = []string{"push", "schedule", "workflow_dispatch"}
 
 type RepoAuditAction struct {
-	Token       string `action:"token"`
 	PolicyPaths string `action:"policy-paths"`
 	Reports     string `action:"reports,output"`
 	Repos       string `action:"repos,output"`
@@ -41,7 +40,7 @@ func (a *RepoAuditAction) Run() error {
 			TimeFormat: time.Kitchen,
 		})
 		ctx    = logger.WithContext(context.Background())
-		client = createClient(a.Token)
+		client = createClient(os.Getenv("GITHUB_TOKEN"))
 		opts   = []sdk.Option{
 			sdk.WithLogger(logger),
 			sdk.WithHTTPClient(client.Client()),
