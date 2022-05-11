@@ -1,6 +1,10 @@
 name: Repo Audit Action
 description: Audit your organization's repositories using Reposaur.
 
+branding:
+  icon: shield
+  color: purple
+
 inputs:
   policy:
     description: Paths to policies or directory of policies (one path per line)
