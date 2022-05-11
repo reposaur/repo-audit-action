@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/crqra/go-action/pkg/action"
 	"github.com/google/go-github/v42/github"
+	"github.com/gregjones/httpcache"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/reposaur/reposaur/pkg/output"
 	"github.com/reposaur/reposaur/pkg/sdk"
@@ -55,18 +57,11 @@ func (a *RepoAuditAction) Run() error {
 	}
 
 	// Initialize Reposaur
-	client := createClient(os.Getenv("GITHUB_TOKEN"))
-
-	httpClient := client.Client()
-	httpClient.Transport = util.GitHubTransport{
-		Logger:    logger,
-		Transport: httpClient.Transport,
-	}
-
 	var (
-		opts = []sdk.Option{
+		client = createClient(ctx, os.Getenv("GITHUB_TOKEN"))
+		opts   = []sdk.Option{
 			sdk.WithLogger(logger),
-			sdk.WithHTTPClient(httpClient),
+			sdk.WithHTTPClient(client.Client()),
 		}
 	)
 
@@ -216,12 +211,27 @@ func isSupportedEvent(event string) bool {
 	return false
 }
 
-func createClient(token string) *github.Client {
-	src := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: token},
+func createClient(ctx context.Context, token string) *github.Client {
+	logger := zerolog.Ctx(ctx)
+
+	ghTransport := &util.GitHubTransport{
+		Logger:    *logger,
+		Transport: http.DefaultTransport,
+	}
+
+	ctx = context.WithValue(ctx, oauth2.HTTPClient, &http.Client{
+		Transport: ghTransport,
+	})
+
+	tokenSource := oauth2.StaticTokenSource(
+		&oauth2.Token{
+			AccessToken: token,
+		},
 	)
+	tokenTransport := oauth2.NewClient(ctx, tokenSource).Transport
 
-	httpClient := oauth2.NewClient(context.Background(), src)
+	cacheTransport := httpcache.NewMemoryCacheTransport()
+	cacheTransport.Transport = tokenTransport
 
-	return github.NewClient(httpClient)
+	return github.NewClient(cacheTransport.Client())
 }
