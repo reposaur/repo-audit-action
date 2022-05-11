@@ -49,9 +49,7 @@ func (a *RepoAuditAction) Run() error {
 		owner       = action.Context.RepositoryOwner
 	)
 
-	fmt.Println(policyPaths, len(policyPaths), len(policyPaths) == 0)
-
-	if len(policyPaths) == 0 {
+	if len(policyPaths) == 1 && policyPaths[0] == "" {
 		logger.Info().Msgf("No policy paths specified. Using '%s' as default", action.Context.Workspace)
 		policyPaths = append(policyPaths, action.Context.Workspace)
 	} else {
