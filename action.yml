@@ -5,7 +5,6 @@ inputs:
   policy-paths:
     description: Policy Paths
     required: false
-    default: '.'
 
 outputs:
   reports:

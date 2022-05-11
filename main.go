@@ -49,6 +49,10 @@ func (a *RepoAuditAction) Run() error {
 		owner       = action.Context.RepositoryOwner
 	)
 
+	if len(policyPaths) == 0 {
+		policyPaths = append(policyPaths, action.Context.Workspace)
+	}
+
 	rsr, err := sdk.New(ctx, policyPaths, opts...)
 	if err != nil {
 		return err
