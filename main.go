@@ -25,8 +25,8 @@ var supportedEvents = []string{"push", "schedule", "workflow_dispatch"}
 
 type RepoAuditAction struct {
 	PolicyPaths string `action:"policy-paths"`
-	Reports     string `action:"reports,output"`
-	Repos       string `action:"repos,output"`
+	// Reports     string `action:"reports,output"`
+	// Repos       string `action:"repos,output"`
 }
 
 func (a *RepoAuditAction) Run() error {
